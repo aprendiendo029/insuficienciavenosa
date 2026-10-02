@@ -45,6 +45,7 @@ export default function App() {
     try {
       await signInWithPopup(auth, googleProvider);
     } catch (error) {
+      console.error("Error de autenticación:", error);
       alert("Error al intentar iniciar sesión con Google.");
     }
   };
@@ -109,10 +110,10 @@ export default function App() {
               </p>
             </div>
 
-            {/* Sección de Autenticación */}
-            <div className="border-t md:border-t-0 md:border-l pt-3 md:pt-0 pl-0 md:pl-4 border-gray-200 w-full md:w-auto flex justify-end">
+            {/* Sección de Autenticación Admin */}
+            <div className="border-t md:border-t-0 md:border-l pt-3 md:pt-0 pl-0 md:pl-4 border-gray-200 w-full md:w-auto flex justify-start md:justify-end">
               {usuario ? (
-                <div className="text-right">
+                <div className="text-left md:text-right">
                   <div className="flex items-center gap-2 mb-1">
                     <span className="text-xs font-medium text-gray-700">{usuario.displayName || usuario.email}</span>
                     {esAdmin && (
@@ -131,7 +132,7 @@ export default function App() {
               ) : (
                 <button
                   onClick={handleLogin}
-                  className="flex items-center gap-2 px-3.5 py-1.5 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 rounded-lg text-xs font-semibold shadow-sm transition-colors cursor-pointer"
+                  className="flex items-center gap-2 px-3.5 py-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 rounded-lg text-xs font-semibold shadow-sm transition-colors cursor-pointer"
                 >
                   <svg className="w-4 h-4" viewBox="0 0 24 24">
                     <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -146,7 +147,7 @@ export default function App() {
           </div>
         </header>
 
-        {/* Solo el Administrador puede ver el Formulario para registrar nuevo gasto */}
+        {/* Solo se despliega si el usuario autenticado es aprendiendo029@gmail.com */}
         {esAdmin && (
           <FormularioGasto onGastoAgregado={handleNuevoGasto} guardando={guardando} />
         )}
