@@ -110,7 +110,7 @@ export default function App() {
             </div>
 
             {/* Sección de Autenticación */}
-            <div className="border-l pl-4 border-gray-200 hidden md:block">
+            <div className="border-t md:border-t-0 md:border-l pt-3 md:pt-0 pl-0 md:pl-4 border-gray-200 w-full md:w-auto flex justify-end">
               {usuario ? (
                 <div className="text-right">
                   <div className="flex items-center gap-2 mb-1">
