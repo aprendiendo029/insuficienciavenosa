@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { actualizarEstatusGasto, eliminarGasto } from "../services/gastosService";
+import { actualizarEstatusGasto, eliminarGasto, actualizarGasto } from "../services/gastosService";
 
-export default function TablaGastos({ gastos, onEstatusCambiado }) {
+export default function TablaGastos({ gastos, onEstatusCambiado, esAdmin }) {
   const [registrosSeleccionados, setRegistrosSeleccionados] = useState([]);
+  const [filtroPagadoPor, setFiltroPagadoPor] = useState("TODOS");
+  const [gastoEnEdicion, setGastoEnEdicion] = useState(null);
 
-  // Rutas actualizadas de Google Drive
   const enlacesDrive = {
     estudios: "https://drive.google.com/drive/folders/1EfJd6Owxq1BSoAPHhAvRLGFw66PHhM8y?usp=share_link",
     medicamentos: "https://drive.google.com/drive/folders/1S0NCZq30oI_FViOefsqAxkgwLW5iBSSX?usp=share_link",
@@ -19,7 +20,6 @@ export default function TablaGastos({ gastos, onEstatusCambiado }) {
     varios: "Otros / Varios"
   };
 
-  // Formato para extraer sólo la fecha corta y el día de la semana (lunes, martes, etc.)
   const formatearFechaLarga = (fechaStr) => {
     if (!fechaStr) return { corto: "", diaSemana: "" };
     const [año, mes, dia] = fechaStr.split("-");
@@ -67,6 +67,35 @@ export default function TablaGastos({ gastos, onEstatusCambiado }) {
     }
   };
 
+  const handleAbrirEdicion = () => {
+    if (registrosSeleccionados.length !== 1) return;
+    const gastoAEditar = gastos.find((g) => g.id === registrosSeleccionados[0]);
+    if (gastoAEditar) {
+      setGastoEnEdicion({ ...gastoAEditar });
+    }
+  };
+
+  const handleGuardarEdicion = async (e) => {
+    e.preventDefault();
+    try {
+      await actualizarGasto(gastoEnEdicion.id, {
+        concepto: gastoEnEdicion.concepto,
+        monto: Number(gastoEnEdicion.monto),
+        categoriaId: gastoEnEdicion.categoriaId,
+        fechaGasto: gastoEnEdicion.fechaGasto,
+        pagadoPor: gastoEnEdicion.pagadoPor,
+        estatus: gastoEnEdicion.estatus,
+        comprobanteUrl: gastoEnEdicion.comprobanteUrl || "",
+        notas: gastoEnEdicion.notas || ""
+      });
+      setGastoEnEdicion(null);
+      setRegistrosSeleccionados([]);
+      if (onEstatusCambiado) onEstatusCambiado();
+    } catch (error) {
+      alert("Error al guardar la edición del gasto");
+    }
+  };
+
   const subtotalesPagados = (gastos || [])
     .filter((g) => g.estatus !== "presupuesto")
     .reduce((acc, gasto) => {
@@ -75,18 +104,58 @@ export default function TablaGastos({ gastos, onEstatusCambiado }) {
       return acc;
     }, {});
 
-  const gastosPagados = (gastos || []).filter((g) => g.estatus !== "presupuesto");
+  const gastosPagadosBase = (gastos || []).filter((g) => g.estatus !== "presupuesto");
   const gastosPresupuesto = (gastos || []).filter((g) => g.estatus === "presupuesto");
 
-  const renderTabla = (listaGastos, titulo, bgBadge, textBadge) => (
+  // Lista única de personas que pagaron para el filtro
+  const listaPersonas = Array.from(new Set(gastosPagadosBase.map((g) => g.pagadoPor))).filter(Boolean);
+
+  // Aplicar filtro de persona
+  const gastosPagados = filtroPagadoPor === "TODOS"
+    ? gastosPagadosBase
+    : gastosPagadosBase.filter((g) => g.pagadoPor.toLowerCase() === filtroPagadoPor.toLowerCase());
+
+  const subtotalFiltroPersona = gastosPagados.reduce((acc, g) => acc + Number(g.monto), 0);
+
+  const renderTabla = (listaGastos, titulo, bgBadge, textBadge, esSeccionPagados = false) => (
     <div className="w-full bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden mb-6">
-      <div className="p-4 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
-        <h3 className="font-bold text-gray-800 text-base flex items-center gap-2">
-          <span>{titulo}</span>
+      <div className="p-4 bg-gray-50 border-b border-gray-100 flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <h3 className="font-bold text-gray-800 text-base">{titulo}</h3>
           <span className={`text-xs px-2.5 py-0.5 rounded-full font-semibold ${bgBadge} ${textBadge}`}>
             {listaGastos.length} registro(s)
           </span>
-        </h3>
+        </div>
+
+        {/* Filtro específico para la sección de Gastos Pagados */}
+        {esSeccionPagados && (
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-2">
+              <label className="text-xs font-semibold text-gray-600">Filtrar por Pagado Por:</label>
+              <select
+                value={filtroPagadoPor}
+                onChange={(e) => setFiltroPagadoPor(e.target.value)}
+                className="text-xs border border-gray-300 rounded-lg px-2.5 py-1.5 bg-white font-medium text-gray-700 outline-none focus:ring-1 focus:ring-blue-500"
+              >
+                <option value="TODOS">Ver todos</option>
+                {listaPersonas.map((persona) => (
+                  <option key={persona} value={persona}>
+                    {persona}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {filtroPagadoPor !== "TODOS" && (
+              <div className="bg-blue-50 border border-blue-200 px-3 py-1 rounded-lg">
+                <span className="text-xs text-blue-700">Subtotal {filtroPagadoPor}: </span>
+                <span className="text-xs font-bold text-blue-900">
+                  ${subtotalFiltroPersona.toLocaleString("es-MX", { minimumFractionDigits: 2 })}
+                </span>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {listaGastos.length === 0 ? (
@@ -143,7 +212,7 @@ export default function TablaGastos({ gastos, onEstatusCambiado }) {
                           rel="noopener noreferrer"
                           className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 font-semibold underline"
                         >
-                          📎 Ver foto
+                          Ver comprobante
                         </a>
                       ) : (
                         <span className="text-xs text-gray-400">Sin foto</span>
@@ -154,9 +223,12 @@ export default function TablaGastos({ gastos, onEstatusCambiado }) {
                     </td>
                     <td className="p-3 text-center">
                       <select
+                        disabled={!esAdmin}
                         value={gasto.estatus || "pagado"}
                         onChange={(e) => handleCambioEstatus(gasto.id, e.target.value)}
-                        className={`text-xs font-semibold px-2.5 py-1 rounded-full border outline-none cursor-pointer ${
+                        className={`text-xs font-semibold px-2.5 py-1 rounded-full border outline-none ${
+                          esAdmin ? "cursor-pointer" : "cursor-default opacity-90"
+                        } ${
                           gasto.estatus === "presupuesto"
                             ? "bg-amber-50 text-amber-700 border-amber-200"
                             : "bg-emerald-50 text-emerald-700 border-emerald-200"
@@ -193,19 +265,138 @@ export default function TablaGastos({ gastos, onEstatusCambiado }) {
         })}
       </div>
 
-      {/* Tabla Gastos Pagados */}
-      {renderTabla(gastosPagados, "Gastos Pagados", "bg-emerald-100", "text-emerald-800")}
+      {/* Tabla Gastos Pagados con Filtro */}
+      {renderTabla(gastosPagados, "Gastos Pagados", "bg-emerald-100", "text-emerald-800", true)}
 
-      {/* Botón Fijo para Borrar Seleccionados (ubicado después de Gastos Pagados) */}
-      <div className="flex justify-end -mt-2 mb-6">
-        <button
-          onClick={handleBorrarSeleccionados}
-          disabled={registrosSeleccionados.length === 0}
-          className="px-4 py-2 bg-red-500 hover:bg-red-600 disabled:bg-gray-300 text-white font-medium rounded-lg text-sm transition-colors cursor-pointer disabled:cursor-not-allowed shadow-sm flex items-center gap-1.5"
-        >
-          <span>🗑️ Borrar ({registrosSeleccionados.length})</span>
-        </button>
-      </div>
+      {/* Botones de Acción (Editar y Borrar sin iconos vectoriales) */}
+      {esAdmin && (
+        <div className="flex justify-end items-center gap-2 -mt-2 mb-6">
+          <button
+            onClick={handleAbrirEdicion}
+            disabled={registrosSeleccionados.length !== 1}
+            className="px-4 py-2 bg-[#00A896] hover:bg-[#028090] disabled:bg-gray-300 text-white font-medium rounded-lg text-sm transition-colors cursor-pointer disabled:cursor-not-allowed shadow-sm"
+          >
+            Editar ({registrosSeleccionados.length})
+          </button>
+
+          <button
+            onClick={handleBorrarSeleccionados}
+            disabled={registrosSeleccionados.length === 0}
+            className="px-4 py-2 bg-red-500 hover:bg-red-600 disabled:bg-gray-300 text-white font-medium rounded-lg text-sm transition-colors cursor-pointer disabled:cursor-not-allowed shadow-sm"
+          >
+            Borrar ({registrosSeleccionados.length})
+          </button>
+        </div>
+      )}
+
+      {/* Modal de Edición */}
+      {gastoEnEdicion && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg p-6 space-y-4">
+            <h3 className="text-lg font-bold text-gray-800 border-b pb-2">Editar Registro de Gasto</h3>
+            <form onSubmit={handleGuardarEdicion} className="space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-700">Concepto</label>
+                <input
+                  type="text"
+                  value={gastoEnEdicion.concepto}
+                  onChange={(e) => setGastoEnEdicion({ ...gastoEnEdicion, concepto: e.target.value })}
+                  className="w-full mt-1 p-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-700">Monto ($ MXN)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={gastoEnEdicion.monto}
+                    onChange={(e) => setGastoEnEdicion({ ...gastoEnEdicion, monto: e.target.value })}
+                    className="w-full mt-1 p-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700">Fecha</label>
+                  <input
+                    type="date"
+                    value={gastoEnEdicion.fechaGasto}
+                    onChange={(e) => setGastoEnEdicion({ ...gastoEnEdicion, fechaGasto: e.target.value })}
+                    className="w-full mt-1 p-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-700">Categoría</label>
+                  <select
+                    value={gastoEnEdicion.categoriaId}
+                    onChange={(e) => setGastoEnEdicion({ ...gastoEnEdicion, categoriaId: e.target.value })}
+                    className="w-full mt-1 p-2 border border-gray-300 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="consultas">Consultas y Honorarios</option>
+                    <option value="medicamentos">Medicamentos y Farmacia</option>
+                    <option value="estudios">Estudios y Laboratorio</option>
+                    <option value="transporte">Transporte y Traslados</option>
+                    <option value="varios">Otros / Varios</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700">Pagado Por</label>
+                  <input
+                    type="text"
+                    value={gastoEnEdicion.pagadoPor}
+                    onChange={(e) => setGastoEnEdicion({ ...gastoEnEdicion, pagadoPor: e.target.value })}
+                    className="w-full mt-1 p-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-700">URL del Comprobante</label>
+                <input
+                  type="url"
+                  value={gastoEnEdicion.comprobanteUrl}
+                  onChange={(e) => setGastoEnEdicion({ ...gastoEnEdicion, comprobanteUrl: e.target.value })}
+                  placeholder="https://drive.google.com/..."
+                  className="w-full mt-1 p-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-700">Notas</label>
+                <textarea
+                  rows="2"
+                  value={gastoEnEdicion.notas}
+                  onChange={(e) => setGastoEnEdicion({ ...gastoEnEdicion, notas: e.target.value })}
+                  className="w-full mt-1 p-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                ></textarea>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t">
+                <button
+                  type="button"
+                  onClick={() => setGastoEnEdicion(null)}
+                  className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg text-xs font-medium cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-[#00A896] hover:bg-[#028090] text-white rounded-lg text-xs font-medium cursor-pointer shadow-sm"
+                >
+                  Guardar Cambios
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Tabla Gastos Presupuestados */}
       {renderTabla(gastosPresupuesto, "Gastos Presupuestados", "bg-amber-100", "text-amber-800")}
@@ -214,7 +405,6 @@ export default function TablaGastos({ gastos, onEstatusCambiado }) {
       <div className="w-full bg-white p-6 rounded-xl shadow-sm border border-gray-100 space-y-4">
         <div className="flex items-center justify-between border-b pb-3">
           <div className="flex items-center gap-3">
-            {/* Ícono vectorial de carpeta principal en azul baby */}
             <svg className="w-7 h-7 text-blue-300 fill-current" viewBox="0 0 24 24">
               <path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/>
             </svg>
@@ -226,7 +416,6 @@ export default function TablaGastos({ gastos, onEstatusCambiado }) {
         </div>
 
         <div className="w-full grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
-          {/* Carpeta 03 */}
           <a
             href={enlacesDrive.estudios}
             target="_blank"
@@ -244,7 +433,6 @@ export default function TablaGastos({ gastos, onEstatusCambiado }) {
             </div>
           </a>
 
-          {/* Carpeta 04 */}
           <a
             href={enlacesDrive.medicamentos}
             target="_blank"
@@ -262,7 +450,6 @@ export default function TablaGastos({ gastos, onEstatusCambiado }) {
             </div>
           </a>
 
-          {/* Carpeta 05 */}
           <a
             href={enlacesDrive.lesion}
             target="_blank"
