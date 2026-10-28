@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import FormularioGasto from "./components/FormularioGasto";
 import TablaGastos from "./components/TablaGastos";
+import SeccionAportaciones from "./components/SeccionAportaciones";
 import { guardarGasto, obtenerGastos } from "./services/gastosService";
 import { auth, googleProvider } from "./firebase/config";
 import { signInWithPopup, signOut, onAuthStateChanged } from "firebase/auth";
@@ -45,7 +46,7 @@ export default function App() {
     try {
       await signInWithPopup(auth, googleProvider);
     } catch (error) {
-      console.error("Error de autenticación:", error);
+      console.error("Error al autenticar:", error);
       alert("Error al intentar iniciar sesión con Google.");
     }
   };
@@ -110,7 +111,7 @@ export default function App() {
               </p>
             </div>
 
-            {/* Sección de Autenticación Admin */}
+            {/* Acceso Admin */}
             <div className="border-t md:border-t-0 md:border-l pt-3 md:pt-0 pl-0 md:pl-4 border-gray-200 w-full md:w-auto flex justify-start md:justify-end">
               {usuario ? (
                 <div className="text-left md:text-right">
@@ -147,7 +148,7 @@ export default function App() {
           </div>
         </header>
 
-        {/* Solo se despliega si el usuario autenticado es aprendiendo029@gmail.com */}
+        {/* Solo el Administrador puede ver el Formulario para registrar nuevo gasto */}
         {esAdmin && (
           <FormularioGasto onGastoAgregado={handleNuevoGasto} guardando={guardando} />
         )}
@@ -160,6 +161,9 @@ export default function App() {
             <TablaGastos gastos={gastos} onEstatusCambiado={cargarDatos} esAdmin={esAdmin} />
           )}
         </div>
+
+        {/* Nueva sección: Aportaciones Familiares */}
+        <SeccionAportaciones esAdmin={esAdmin} />
       </div>
     </div>
   );
